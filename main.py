@@ -24,7 +24,7 @@ def generate_certificate(username: str):
         # Генерация ключа клиента
         key_gen_command = ["ipsec", "pki", "--gen", "--outform", "pem"]
         with open(client_key, "wb") as key_file:
-            subprocess.run(key_gen_command, stdout=key_file, check=True)
+            key_gen_result = subprocess.run(key_gen_command, stdout=key_file, stderr=subprocess.PIPE, check=True)
 
         # Генерация сертификата клиента
         cert_gen_command = [
@@ -39,11 +39,11 @@ def generate_certificate(username: str):
 
         # Использование временного файла для хранения сертификата
         with open(client_cert, "wb") as cert_file:
-            subprocess.run(cert_gen_command, stdout=cert_file, check=True)
+            cert_gen_result = subprocess.run(cert_gen_command, stdout=cert_file, stderr=subprocess.PIPE, check=True)
 
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error during certificate generation: {e}")
-        raise HTTPException(status_code=500, detail="Error generating certificate or key")
+        logging.error(f"Error during certificate generation: {e.stderr.decode().strip()}")
+        raise HTTPException(status_code=500, detail="Error generating client key or certificate")
 
     return {"message": "Certificate generated", "cert_path": client_cert, "key_path": client_key}
 
