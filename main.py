@@ -16,20 +16,24 @@ CA_KEY = "/etc/ipsec.d/private/ca-key.pem"
 
 @app.post("/generate_certificate/{username}")
 def generate_certificate(username: str):
-    # Пути для хранения сертификата и ключа пользователя
     client_cert = os.path.join(CERT_DIR, f"client-cert-{username}.pem")
     client_key = os.path.join(KEY_DIR, f"client-key-{username}.pem")
 
     try:
         # Генерация ключа клиента
-        key_gen_command = ["ipsec", "pki", "--gen", "--outform", "pem"]
+        key_gen_command = ["/usr/sbin/ipsec", "pki", "--gen", "--outform", "pem"]
         with open(client_key, "wb") as key_file:
             key_gen_result = subprocess.run(key_gen_command, stdout=key_file, stderr=subprocess.PIPE, check=True)
 
+        logging.info(f"Client key generated at: {client_key}")
+
+        # Генерация публичного ключа
+        pub_key_command = ["/usr/sbin/ipsec", "pki", "--pub", "--in", client_key]
+        pub_key_result = subprocess.run(pub_key_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
         # Генерация сертификата клиента
         cert_gen_command = [
-            "ipsec", "pki", "--pub", "--in", client_key,
-            "|", "ipsec", "pki", "--issue",
+            "/usr/sbin/ipsec", "pki", "--issue",
             "--lifetime", "14",
             "--cacert", CA_CERT,
             "--cakey", CA_KEY,
@@ -37,13 +41,14 @@ def generate_certificate(username: str):
             "--outform", "pem"
         ]
 
-        # Использование временного файла для хранения сертификата
         with open(client_cert, "wb") as cert_file:
-            cert_gen_result = subprocess.run(cert_gen_command, stdout=cert_file, stderr=subprocess.PIPE, check=True)
+            cert_gen_result = subprocess.run(cert_gen_command, input=pub_key_result.stdout, stdout=cert_file, stderr=subprocess.PIPE, check=True)
+
+        logging.info(f"Client certificate generated at: {client_cert}")
 
     except subprocess.CalledProcessError as e:
         logging.error(f"Error during certificate generation: {e.stderr.decode().strip()}")
-        raise HTTPException(status_code=500, detail="Error generating client key or certificate")
+        raise HTTPException(status_code=500, detail=f"Error generating client key or certificate: {e.stderr.decode().strip()}")
 
     return {"message": "Certificate generated", "cert_path": client_cert, "key_path": client_key}
 

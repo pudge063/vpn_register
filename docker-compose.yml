@@ -8,5 +8,6 @@ services:
     ports:
       - '8000:8000'
     volumes:
-      - /etc/ipsec.d:/etc/ipsec.d
+      - /etc/ipsec.d/certs:/etc/ipsec.d/certs
+      - /etc/ipsec.d/private:/etc/ipsec.d/private
     restart: always
