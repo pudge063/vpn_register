@@ -1,0 +1,12 @@
+version: '3'
+services:
+  fastapi:
+    container_name: fastapi
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8000:8000'
+    volumes:
+      - /etc/ipsec.d:/etc/ipsec.d
+    restart: always
