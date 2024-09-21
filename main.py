@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException
 import subprocess
 import os
-
+import logging
 from starlette.responses import FileResponse
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
@@ -17,21 +20,30 @@ def generate_certificate(username: str):
     client_cert = os.path.join(CERT_DIR, f"client-cert-{username}.pem")
     client_key = os.path.join(KEY_DIR, f"client-key-{username}.pem")
 
-    # Генерация ключа клиента
-    key_gen_command = f"ipsec pki --gen --outform pem > {client_key}"
-    key_gen_result = subprocess.run(key_gen_command, shell=True, capture_output=True)
-    if key_gen_result.returncode != 0:
-        raise HTTPException(status_code=500, detail="Error generating client key")
+    try:
+        # Генерация ключа клиента
+        key_gen_command = ["ipsec", "pki", "--gen", "--outform", "pem"]
+        with open(client_key, "wb") as key_file:
+            subprocess.run(key_gen_command, stdout=key_file, check=True)
 
-    # Генерация сертификата клиента
-    cert_gen_command = (
-        f"ipsec pki --pub --in {client_key} | "
-        f"ipsec pki --issue --lifetime 14 --cacert {CA_CERT} --cakey {CA_KEY} "
-        f"--dn 'CN={username}' --outform pem > {client_cert}"
-    )
-    cert_gen_result = subprocess.run(cert_gen_command, shell=True, capture_output=True)
-    if cert_gen_result.returncode != 0:
-        raise HTTPException(status_code=500, detail="Error generating client certificate")
+        # Генерация сертификата клиента
+        cert_gen_command = [
+            "ipsec", "pki", "--pub", "--in", client_key,
+            "|", "ipsec", "pki", "--issue",
+            "--lifetime", "14",
+            "--cacert", CA_CERT,
+            "--cakey", CA_KEY,
+            "--dn", f"CN={username}",
+            "--outform", "pem"
+        ]
+
+        # Использование временного файла для хранения сертификата
+        with open(client_cert, "wb") as cert_file:
+            subprocess.run(cert_gen_command, stdout=cert_file, check=True)
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error during certificate generation: {e}")
+        raise HTTPException(status_code=500, detail="Error generating certificate or key")
 
     return {"message": "Certificate generated", "cert_path": client_cert, "key_path": client_key}
 
